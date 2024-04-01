@@ -48,3 +48,79 @@ def parse_proc_content(proc_content, program_name_patterns, special_programs):
         })
 
     return program_blocks
+
+
+import os
+import re
+import pandas as pd
+
+# Define your patterns and other functions here ...
+
+# Assume parse_proc_content is defined as shown in the previous example
+# ...
+
+def traverse_and_extract(job_file_path, proc_file_path):
+    jobs_procs_programs = []
+
+    # Traverse the CG_Jobs directory
+    for root, dirs, files in os.walk(job_file_path):
+        for file in files:
+            job_names = extract_job_and_proc_name(file)
+            if job_names:
+                job_name = job_names[0]
+                with open(os.path.join(root, file), 'r') as file_content:
+                    content_lines = [line for line in file_content if pattern.match(line)]
+                    content = "".join(content_lines)
+                    proc_names = extract_proc_names(content)
+                    prg_names_in_job = extract_program_names(content)
+
+                    # For each proc_name, find the corresponding file in the CG_Procs directory
+                    for proc_name in proc_names:
+                        proc_matched = False
+                        for proc_root, proc_dirs, proc_files in os.walk(proc_file_path):
+                            for proc_file in proc_files:
+                                if proc_name in extract_job_and_proc_name(proc_file):
+                                    proc_matched = True
+                                    with open(os.path.join(proc_root, proc_file), 'r') as proc_file_content:
+                                        proc_content_lines = [line for line in proc_file_content if pattern.match(line)]
+                                        proc_content = "".join(proc_content_lines)
+                                        
+                                        # Parse the proc content for program names and associated DSN/DISP
+                                        program_blocks = parse_proc_content(proc_content, program_name_patterns, special_programs)
+                                        
+                                        # Iterate over the program blocks to collect the job-proc-program relationship
+                                        for block in program_blocks:
+                                            for dsn_disp in block['dsn_disp']:
+                                                jobs_procs_programs.append({
+                                                    'job_name': job_name,
+                                                    'proc_name': proc_name,
+                                                    'prg_name_in_proc': block['program_name'],
+                                                    'prg_name_in_job': 'na',  # No direct program name in job
+                                                    'dsn_filename': dsn_disp[0],
+                                                    'disp_value': dsn_disp[1]
+                                                })
+
+                        # Handle the case where the proc is not found
+                        if not proc_matched:
+                            jobs_procs_programs.append({
+                                'job_name': job_name,
+                                'proc_name': proc_name,
+                                'prg_name_in_proc': 'na',  # No proc file, hence no program name
+                                'prg_name_in_job': 'na',  # No direct program name in job
+                                'dsn_filename': 'na',  # No DSN since no proc file
+                                'disp_value': 'na'  # No DISP since no proc file
+                            })
+
+                    # Process the program names directly in the job files
+                    # ...
+
+    # Convert the collected data into a DataFrame
+    df = pd.DataFrame(jobs_procs_programs)
+    # ... (Rest of your DataFrame processing)
+
+    return df
+
+# Example usage
+job_file_path = "/path/to/job/files"
+proc_file_path = "/path/to/proc/files"
+df = traverse_and_extract(job_file_path, proc_file_path)
