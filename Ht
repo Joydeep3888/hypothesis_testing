@@ -160,3 +160,50 @@ test_results = parse_jcl_content(jcl_content_test)
 
 # Display the test results
 test_results
+
+
+import pandas as pd
+
+# Simulating file content for two JCL files
+jcl_file_contents = {
+    "JOB1.jcl": """
+//JOB1 EXEC PGM=PROGRAM1
+//DD1 DD DSN=filename1,DISP=SHR
+//DD2 DD DSN=filename2,DISP=NEW
+""",
+    "JOB2.jcl": """
+//JOB2 EXEC PGM=PROGRAM2
+//DD1 DD DSN=filename3,DISP=OLD
+//DD2 DD DSN=filename4,DISP=MOD
+"""
+}
+
+def traverse_jcl_directory(jcl_file_contents):
+    all_jcl_results = []
+
+    for file_name, file_content in jcl_file_contents.items():
+        job_name = extract_job_and_proc_name(file_name)[0]  # Simulating job name extraction from file name
+        
+        # Parsing the content of each "file"
+        jcl_results = parse_jcl_content(file_content)
+
+        for result in jcl_results:
+            all_jcl_results.append({
+                'job_name': job_name,
+                'program_name_inside_job': result['program_name_inside_proc'],
+                'dsn_file_name': result['dsn_file_name'],
+                'disp_value': result['disp_value']
+            })
+
+    # Convert the results into a DataFrame
+    return pd.DataFrame(all_jcl_results)
+
+# Define a simple version of extract_job_and_proc_name for testing
+def extract_job_and_proc_name(file_name):
+    return [file_name.split('.')[0]]  # Assuming job name is the part before the first '.'
+
+# Run the traversal simulation
+jcl_df = traverse_jcl_directory(jcl_file_contents)
+
+# Display the DataFrame
+jcl_df
