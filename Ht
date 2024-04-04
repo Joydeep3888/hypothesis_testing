@@ -1,6 +1,20 @@
 
 
 
+# Testing the updated parse_proc_content function with the sample PROC content
+
+# Redefining the extract_dsn_filename and extract_disposition functions for testing
+def extract_dsn_filename(line):
+    dsn_pattern = re.compile(r'DD\s+DSN=([^,]+)', re.IGNORECASE)
+    matches = dsn_pattern.findall(line)
+    return [match.strip() for match in matches]
+
+def extract_disposition(line):
+    disp_pattern = re.compile(r'DISP=([a-zA-Z0-9_]+)', re.IGNORECASE)
+    matches = disp_pattern.findall(line)
+    return [match.strip() for match in matches]
+
+# Updated parse_proc_content function based on the previous response
 def parse_proc_content(proc_content):
     program_patterns = [
         re.compile(r'^\/\/\S+\s+EXEC\s+PGM=([a-zA-Z0-9_]+)', re.IGNORECASE),
@@ -14,6 +28,7 @@ def parse_proc_content(proc_content):
     results = []
     current_program = None
     handle_special_program = False
+    dsn_matches, disp_matches = [], []
 
     for line in proc_content.splitlines():
         if line.startswith('//*') or line.startswith('//**'):
@@ -44,8 +59,7 @@ def parse_proc_content(proc_content):
                         })
                 # Update current program
                 current_program = program_match.group(1)
-                dsn_matches = extract_dsn_filename(line)
-                disp_matches = extract_disposition(line)
+                dsn_matches, disp_matches = extract_dsn_filename(line), extract_disposition(line)
                 break  # Found a match, no need to check other patterns
 
         if not special_program_match and not program_match:
@@ -64,7 +78,20 @@ def parse_proc_content(proc_content):
 
     return results
 
-# Let's test the updated function with the same sample content
+# Sample PROC content for testing
+proc_content_test = """
+//STEP1 EXEC PGM=PROGRAM1
+//DD1 DD DSN=filename1,DISP=SHR
+//STEP2 EXEC PGM=DFSRRC00
+//PARM=('SPECIAL1')
+//DD2 DD DSN=filename2,DISP=NEW
+//STEP3 EXEC PGM=PROGRAM2
+//DD3 DD DSN=filename3,DISP=OLD
+//STEP4 EXEC RUN PROGRAM=PROGRAM3
+//DD4 DD DSN=filename4,DISP=MOD
+"""
+
+# Run the test
 test_results = parse_proc_content(proc_content_test)
 
 # Display the updated test results
