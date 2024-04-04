@@ -1,0 +1,71 @@
+
+
+
+def parse_proc_content(proc_content):
+    program_patterns = [
+        re.compile(r'^\/\/\S+\s+EXEC\s+PGM=([a-zA-Z0-9_]+)', re.IGNORECASE),
+        re.compile(r'^\/\/.*?PARM=\'[^,]+,\s*([a-zA-Z0-9_]+)', re.IGNORECASE),
+        re.compile(r'^\/\/.*?PARM=BMP,\s*([a-zA-Z0-9_]+)', re.IGNORECASE),
+        re.compile(r'^\/\/.*?RUN\s+PROGRAM=([a-zA-Z0-9_]+)', re.IGNORECASE),
+    ]
+    special_program_pattern = re.compile(r'^\/\/\S+\s+EXEC\s+PGM=(DFSRRC00|IKJEFT01)', re.IGNORECASE)
+    special_param_pattern = re.compile(r"^\/\/.*PARM\=\(\'([^\']+)\'\)", re.IGNORECASE)
+
+    results = []
+    current_program = None
+    handle_special_program = False
+
+    for line in proc_content.splitlines():
+        if line.startswith('//*') or line.startswith('//**'):
+            continue  # Ignore comment lines
+
+        special_program_match = special_program_pattern.match(line)
+        if special_program_match:
+            handle_special_program = True  # Indicate special program handling
+            continue
+
+        if handle_special_program:
+            special_param_match = special_param_pattern.match(line)
+            if special_param_match:
+                current_program = special_param_match.group(1)  # Use special program name
+                handle_special_program = False  # Reset flag
+                continue  # Skip to next iteration
+
+        for pattern in program_patterns:
+            program_match = pattern.match(line)
+            if program_match:
+                # Found a regular program name, save any pending DSN/DISP pairs for the previous program
+                if current_program:
+                    for dsn, disp in zip(dsn_matches, disp_matches):
+                        results.append({
+                            'program_name_inside_proc': current_program,
+                            'dsn_file_name': dsn,
+                            'disp_value': disp
+                        })
+                # Update current program
+                current_program = program_match.group(1)
+                dsn_matches = extract_dsn_filename(line)
+                disp_matches = extract_disposition(line)
+                break  # Found a match, no need to check other patterns
+
+        if not special_program_match and not program_match:
+            # Line doesn't define a new program, check for DSN/DISP for the current program
+            dsn_matches += extract_dsn_filename(line)
+            disp_matches += extract_disposition(line)
+
+    # After all lines are processed, save any remaining DSN/DISP pairs for the last program
+    if current_program:
+        for dsn, disp in zip(dsn_matches, disp_matches):
+            results.append({
+                'program_name_inside_proc': current_program,
+                'dsn_file_name': dsn,
+                'disp_value': disp
+            })
+
+    return results
+
+# Let's test the updated function with the same sample content
+test_results = parse_proc_content(proc_content_test)
+
+# Display the updated test results
+test_results
