@@ -96,3 +96,67 @@ test_results = parse_proc_content(proc_content_test)
 
 # Display the updated test results
 test_results
+
+
+
+
+
+# Redefining necessary imports, functions, and testing the parse_jcl_content function after the reset
+
+import re
+
+def extract_dsn_filename(line):
+    dsn_pattern = re.compile(r'DD\s+DSN=([^,]+)', re.IGNORECASE)
+    matches = dsn_pattern.findall(line)
+    return [match.strip() for match in matches]
+
+def extract_disposition(line):
+    disp_pattern = re.compile(r'DISP=([a-zA-Z0-9_]+)', re.IGNORECASE)
+    matches = disp_pattern.findall(line)
+    return [match.strip() for match in matches]
+
+def parse_jcl_content(jcl_content):
+    program_patterns = [
+        re.compile(r'^\/\/\S+\s+EXEC\s+PGM=([a-zA-Z0-9_]+)', re.IGNORECASE),
+    ]
+    
+    results = []
+    current_program = None
+
+    for line in jcl_content.splitlines():
+        if line.startswith('//*') or line.startswith('//**'):
+            continue  # Ignore comment lines
+
+        for pattern in program_patterns:
+            program_match = pattern.match(line)
+            if program_match:
+                current_program = program_match.group(1)
+                break  # Found a program name, no need to check other patterns
+
+        if current_program:
+            dsn_matches = extract_dsn_filename(line)
+            disp_matches = extract_disposition(line)
+            for dsn, disp in zip(dsn_matches, disp_matches):
+                results.append({
+                    'program_name_inside_proc': current_program,
+                    'dsn_file_name': dsn,
+                    'disp_value': disp
+                })
+
+    return results
+
+# Sample JCL content for testing
+jcl_content_test = """
+//JOB1 EXEC PGM=PROGRAM1
+//DD1 DD DSN=filename1,DISP=SHR
+//DD2 DD DSN=filename2,DISP=NEW
+//JOB2 EXEC PGM=PROGRAM2
+//DD1 DD DSN=filename3,DISP=OLD
+//DD2 DD DSN=filename4,DISP=MOD
+"""
+
+# Run the test
+test_results = parse_jcl_content(jcl_content_test)
+
+# Display the test results
+test_results
