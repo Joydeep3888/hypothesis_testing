@@ -1,209 +1,40 @@
 
 
 
-# Testing the updated parse_proc_content function with the sample PROC content
-
-# Redefining the extract_dsn_filename and extract_disposition functions for testing
-def extract_dsn_filename(line):
-    dsn_pattern = re.compile(r'DD\s+DSN=([^,]+)', re.IGNORECASE)
-    matches = dsn_pattern.findall(line)
-    return [match.strip() for match in matches]
-
-def extract_disposition(line):
-    disp_pattern = re.compile(r'DISP=([a-zA-Z0-9_]+)', re.IGNORECASE)
-    matches = disp_pattern.findall(line)
-    return [match.strip() for match in matches]
-
-# Updated parse_proc_content function based on the previous response
-def parse_proc_content(proc_content):
-    program_patterns = [
-        re.compile(r'^\/\/\S+\s+EXEC\s+PGM=([a-zA-Z0-9_]+)', re.IGNORECASE),
-        re.compile(r'^\/\/.*?PARM=\'[^,]+,\s*([a-zA-Z0-9_]+)', re.IGNORECASE),
-        re.compile(r'^\/\/.*?PARM=BMP,\s*([a-zA-Z0-9_]+)', re.IGNORECASE),
-        re.compile(r'^\/\/.*?RUN\s+PROGRAM=([a-zA-Z0-9_]+)', re.IGNORECASE),
-    ]
-    special_program_pattern = re.compile(r'^\/\/\S+\s+EXEC\s+PGM=(DFSRRC00|IKJEFT01)', re.IGNORECASE)
-    special_param_pattern = re.compile(r"^\/\/.*PARM\=\(\'([^\']+)\'\)", re.IGNORECASE)
-
-    results = []
-    current_program = None
-    handle_special_program = False
-    dsn_matches, disp_matches = [], []
-
-    for line in proc_content.splitlines():
-        if line.startswith('//*') or line.startswith('//**'):
-            continue  # Ignore comment lines
-
-        special_program_match = special_program_pattern.match(line)
-        if special_program_match:
-            handle_special_program = True  # Indicate special program handling
-            continue
-
-        if handle_special_program:
-            special_param_match = special_param_pattern.match(line)
-            if special_param_match:
-                current_program = special_param_match.group(1)  # Use special program name
-                handle_special_program = False  # Reset flag
-                continue  # Skip to next iteration
-
-        for pattern in program_patterns:
-            program_match = pattern.match(line)
-            if program_match:
-                # Found a regular program name, save any pending DSN/DISP pairs for the previous program
-                if current_program:
-                    for dsn, disp in zip(dsn_matches, disp_matches):
-                        results.append({
-                            'program_name_inside_proc': current_program,
-                            'dsn_file_name': dsn,
-                            'disp_value': disp
-                        })
-                # Update current program
-                current_program = program_match.group(1)
-                dsn_matches, disp_matches = extract_dsn_filename(line), extract_disposition(line)
-                break  # Found a match, no need to check other patterns
-
-        if not special_program_match and not program_match:
-            # Line doesn't define a new program, check for DSN/DISP for the current program
-            dsn_matches += extract_dsn_filename(line)
-            disp_matches += extract_disposition(line)
-
-    # After all lines are processed, save any remaining DSN/DISP pairs for the last program
-    if current_program:
-        for dsn, disp in zip(dsn_matches, disp_matches):
-            results.append({
-                'program_name_inside_proc': current_program,
-                'dsn_file_name': dsn,
-                'disp_value': disp
-            })
-
-    return results
-
-# Sample PROC content for testing
-proc_content_test = """
-//STEP1 EXEC PGM=PROGRAM1
-//DD1 DD DSN=filename1,DISP=SHR
-//STEP2 EXEC PGM=DFSRRC00
-//PARM=('SPECIAL1')
-//DD2 DD DSN=filename2,DISP=NEW
-//STEP3 EXEC PGM=PROGRAM2
-//DD3 DD DSN=filename3,DISP=OLD
-//STEP4 EXEC RUN PROGRAM=PROGRAM3
-//DD4 DD DSN=filename4,DISP=MOD
-"""
-
-# Run the test
-test_results = parse_proc_content(proc_content_test)
-
-# Display the updated test results
-test_results
-
-
-
-
-
-# Redefining necessary imports, functions, and testing the parse_jcl_content function after the reset
-
-import re
-
-def extract_dsn_filename(line):
-    dsn_pattern = re.compile(r'DD\s+DSN=([^,]+)', re.IGNORECASE)
-    matches = dsn_pattern.findall(line)
-    return [match.strip() for match in matches]
-
-def extract_disposition(line):
-    disp_pattern = re.compile(r'DISP=([a-zA-Z0-9_]+)', re.IGNORECASE)
-    matches = disp_pattern.findall(line)
-    return [match.strip() for match in matches]
-
-def parse_jcl_content(jcl_content):
-    program_patterns = [
-        re.compile(r'^\/\/\S+\s+EXEC\s+PGM=([a-zA-Z0-9_]+)', re.IGNORECASE),
-    ]
-    
-    results = []
-    current_program = None
-
-    for line in jcl_content.splitlines():
-        if line.startswith('//*') or line.startswith('//**'):
-            continue  # Ignore comment lines
-
-        for pattern in program_patterns:
-            program_match = pattern.match(line)
-            if program_match:
-                current_program = program_match.group(1)
-                break  # Found a program name, no need to check other patterns
-
-        if current_program:
-            dsn_matches = extract_dsn_filename(line)
-            disp_matches = extract_disposition(line)
-            for dsn, disp in zip(dsn_matches, disp_matches):
-                results.append({
-                    'program_name_inside_proc': current_program,
-                    'dsn_file_name': dsn,
-                    'disp_value': disp
-                })
-
-    return results
-
-# Sample JCL content for testing
-jcl_content_test = """
-//JOB1 EXEC PGM=PROGRAM1
-//DD1 DD DSN=filename1,DISP=SHR
-//DD2 DD DSN=filename2,DISP=NEW
-//JOB2 EXEC PGM=PROGRAM2
-//DD1 DD DSN=filename3,DISP=OLD
-//DD2 DD DSN=filename4,DISP=MOD
-"""
-
-# Run the test
-test_results = parse_jcl_content(jcl_content_test)
-
-# Display the test results
-test_results
-
-
+import os
 import pandas as pd
 
-# Simulating file content for two JCL files
-jcl_file_contents = {
-    "JOB1.jcl": """
-//JOB1 EXEC PGM=PROGRAM1
-//DD1 DD DSN=filename1,DISP=SHR
-//DD2 DD DSN=filename2,DISP=NEW
-""",
-    "JOB2.jcl": """
-//JOB2 EXEC PGM=PROGRAM2
-//DD1 DD DSN=filename3,DISP=OLD
-//DD2 DD DSN=filename4,DISP=MOD
-"""
-}
-
-def traverse_jcl_directory(jcl_file_contents):
+def traverse_jcl_directory(jcl_directory):
     all_jcl_results = []
 
-    for file_name, file_content in jcl_file_contents.items():
-        job_name = extract_job_and_proc_name(file_name)[0]  # Simulating job name extraction from file name
-        
-        # Parsing the content of each "file"
-        jcl_results = parse_jcl_content(file_content)
+    # Traverse the directory with JCL files
+    for root, _, files in os.walk(jcl_directory):
+        for file_name in files:
+            if file_name.endswith('.jcl'):  # Process only JCL files
+                job_name = extract_job_and_proc_name(file_name)[0]  # Assuming the first match is the job name
+                file_path = os.path.join(root, file_name)
 
-        for result in jcl_results:
-            all_jcl_results.append({
-                'job_name': job_name,
-                'program_name_inside_job': result['program_name_inside_proc'],
-                'dsn_file_name': result['dsn_file_name'],
-                'disp_value': result['disp_value']
-            })
+                with open(file_path, 'r') as jcl_file:
+                    content = jcl_file.read()
 
-    # Convert the results into a DataFrame
-    return pd.DataFrame(all_jcl_results)
+                    # Parsing the content of each JCL file
+                    jcl_results = parse_jcl_content(content)
 
-# Define a simple version of extract_job_and_proc_name for testing
-def extract_job_and_proc_name(file_name):
-    return [file_name.split('.')[0]]  # Assuming job name is the part before the first '.'
+                    for result in jcl_results:
+                        all_jcl_results.append({
+                            'job_name': job_name,
+                            'program_name_inside_job': result['program_name_inside_proc'],  # Adjust key based on your parse_jcl_content implementation
+                            'dsn_file_name': result['dsn_file_name'],
+                            'disp_value': result['disp_value']
+                        })
 
-# Run the traversal simulation
-jcl_df = traverse_jcl_directory(jcl_file_contents)
+    # Convert the results into a DataFrame for better presentation and further analysis
+    df = pd.DataFrame(all_jcl_results)
+    return df
 
-# Display the DataFrame
-jcl_df
+# Make sure the jcl_directory variable points to the actual path where your JCL files are stored
+jcl_directory = "/path/to/your/jcl/files"
+jcl_df = traverse_jcl_directory(jcl_directory)
+
+# Display the DataFrame to verify the results
+print(jcl_df)
